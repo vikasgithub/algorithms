@@ -12,6 +12,13 @@ public class PercolationStats {
     private double[] simulationResults;
 
     public PercolationStats(int N, int T) {
+        if (N <= 0) {
+            throw new IllegalArgumentException("N should be more then zero");
+        }
+        if (T <= 0) {
+            throw new IllegalArgumentException("T should be more then zero");
+        }
+
         this.N = N;
         this.T = T;
         simulationResults = new double[T];
@@ -49,7 +56,7 @@ public class PercolationStats {
         return StdStats.mean(simulationResults);
     }
 
-    public double stdDev() {
+    public double stddev() {
         return StdStats.stddev(simulationResults);
     }
 
@@ -73,17 +80,25 @@ public class PercolationStats {
 
         PercolationStats percSim =
                 new PercolationStats(gridSize, simulationCount);
-        double confidenceLeft = percSim.mean() - 1.96
-                * percSim.stdDev() / Math.sqrt(percSim.T);
-        double confidenceRight = percSim.mean() + 1.96
-                * percSim.stdDev() / Math.sqrt(percSim.T);
+        double confidenceLo = percSim.confidenceLo();
+        double confidenceHi = percSim.confidenceHi();
 
 
         System.out.println("mean                    = "
                 + percSim.mean());
-        System.out.println("stdDev                  = "
-                + percSim.stdDev());
+        System.out.println("stddev                  = "
+                + percSim.stddev());
         System.out.println("95% confidence interval = "
-                + confidenceLeft + ", " + confidenceRight);
+                + confidenceLo + ", " + confidenceHi);
+    }
+
+    public double confidenceHi() {
+        return mean() + 1.96
+                    * stddev() / Math.sqrt(T);
+    }
+
+    public double confidenceLo() {
+        return mean() - 1.96
+                    * stddev() / Math.sqrt(T);
     }
 }

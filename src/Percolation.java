@@ -7,112 +7,88 @@
  */
 public class Percolation {
 
-    private int N;
-    private int[] grid;
-    private WeightedQuickUnionUF UF;
-    private int virtualTopSitePosition;
-    private int virtualBottomSitePosition;
+    private final int N; // Length of one side of the grid.
+    private boolean[] open;
+    private WeightedQuickUnionUF percolation;
+    private WeightedQuickUnionUF fullness;
+    private final int virtualTop;
+    private final int virtualBottom;
 
+    // create N-by-N grid, with all sites blocked
     public Percolation(int N) {
+        // The union-find data type we're using indexes its arrays with an int,
+        // so our N^2 sized grid must have N^2 <= 2^32 - 1 <=> N > 2^16.
+        // N^2 <= 2^32 - 3 <-> N^2 < 2^32 - 2 -> N < 0xffff
+        if (N >= 0xffff)
+            throw new IllegalArgumentException("Dimension must be < 2^16");
         this.N = N;
-        grid = new int[N * N];
-
-        //every cell plus virtual top site and virtual bottom site
-        UF = new WeightedQuickUnionUF(N * N + 2);
-        virtualTopSitePosition = N * N;
-        virtualBottomSitePosition = N * N + 1;
-
-        //union each site in top & bottom rows to respective virtual sites
-        for (int j = 1; j < N; j++) {
-            UF.union(coordinatesToPosition(1, j), virtualTopSitePosition);
-            UF.union(coordinatesToPosition(N, j), virtualBottomSitePosition);
-        }
+        open = new boolean[N*N];
+        // Add two for the virtual top and bottom
+        percolation = new WeightedQuickUnionUF(N*N + 2);
+        fullness = new WeightedQuickUnionUF(N*N + 2);
+        virtualTop = indexOf(N, N) + 1;
+        virtualBottom = indexOf(N, N) + 2;
     }
 
-    private int coordinatesToPosition(int i, int j) {
-        checkInBounds(i, j);
-        return N * i - (N - j + 1);
-    }
-
-    private void checkInBounds(int i, int j) {
-        if (!exists(i, j))
-            throw new IndexOutOfBoundsException("grid index out of bounds");
-    }
-
+    // is site (row i, column j) open?
     public boolean isOpen(int i, int j) {
-        checkInBounds(i, j);
-        if (grid[coordinatesToPosition(i, j)] != 0) {
-            return true;
-        }
-        return false;
-
+        return open[indexOf(i, j)];
     }
 
+    // is site (row i, column j) full?
     public boolean isFull(int i, int j) {
-        checkInBounds(i, j);
-        if (grid[coordinatesToPosition(i, j)] == 0) {
-            return true;
-        }
-        return false;
-
+        return fullness.connected(virtualTop, indexOf(i, j));
     }
 
-    public void open(int i, int j) {
-        checkInBounds(i, j);
-        this.grid[coordinatesToPosition(i, j)] = 1;
-
-        if (exists(i - 1, j) && isOpen(i - 1, j)) {
-            UF.union(coordinatesToPosition(i, j),
-                    coordinatesToPosition(i - 1, j));
-        }
-
-        if (exists(i + 1, j) && isOpen(i + 1, j)) {
-            UF.union(coordinatesToPosition(i, j),
-                    coordinatesToPosition(i + 1, j));
-        }
-
-        if (exists(i, j - 1) && isOpen(i, j - 1)) {
-            UF.union(coordinatesToPosition(i, j),
-                    coordinatesToPosition(i, j - 1));
-        }
-
-        if (exists(i, j + 1) && isOpen(i, j + 1)) {
-            UF.union(coordinatesToPosition(i, j),
-                    coordinatesToPosition(i, j + 1));
-        }
-
-    }
-
-    private boolean exists(int i, int j) {
-        if (i <= 0 || i > N) {
-            return false;
-        }
-        if (j <= 0 || j > N) {
-            return false;
-        }
-        return true;
-    }
-
+    // does the system percolate?
     public boolean percolates() {
-        if (UF.connected(virtualTopSitePosition, virtualBottomSitePosition)) {
-            return true;
-        }
-        return false;
+        return percolation.connected(virtualTop, virtualBottom);
     }
 
-    public static void main(String[] args) {
-        Percolation perc = new Percolation(4);
-        System.out.println("percolates? " + perc.percolates());
-        System.out.println(perc.isFull(2, 2));
-        perc.open(2, 2);
-        System.out.println(perc.isFull(2, 2));
+    // open site (row i, column j) if it is not already
+    public void open(int i, int j) {
+        if (isOpen(i, j))
+            return;
+        int index = indexOf(i, j);
 
-        perc.open(1, 2);
-        perc.open(3, 2);
-        perc.open(4, 2);
+        open[index] = true;
 
-        System.out.println(perc.grid.length);
-        System.out.println("percolates? " + perc.percolates());
+        if (i == 1) {
+            percolation.union(virtualTop, index);
+            fullness.union(virtualTop, index);
+        }
+        if (i == N)
+            percolation.union(virtualBottom, index);
+
+        if (i < N  && isOpen(i + 1, j)) {
+            percolation.union(indexOf(i + 1, j), index);
+            fullness.union(indexOf(i + 1, j), index);
+        }
+        if (i > 1 && isOpen(i - 1, j)) {
+            percolation.union(indexOf(i - 1, j), index);
+            fullness.union(indexOf(i - 1, j), index);
+        }
+
+        if (j < N && isOpen(i, j + 1)) {
+            percolation.union(indexOf(i, j + 1), index);
+            fullness.union(indexOf(i, j + 1), index);
+        }
+        if (j > 1 && isOpen(i, j - 1)) {
+            percolation.union(indexOf(i, j - 1), index);
+            fullness.union(indexOf(i, j - 1), index);
+        }
+    }
+
+    /* Convert grid coordinates of the form (x, y) where x,y in {1,...,N}
+    to an array index. E.g., indexOf(1,1) == 0; indexOf(N, N) = N^2 - 1.
+
+    Assume the grid is in row-major form.
+    */
+    private int indexOf(int row, int col) {
+        if (row <= 0 || row > N || col <= 0 || col > N)
+            throw new IndexOutOfBoundsException(
+                    "(" + row + ", " + col + ") out of bounds "
+                            + "for " + N + "^2 grid.");
+        return (row - 1) * N + (col - 1);
     }
 }
-
